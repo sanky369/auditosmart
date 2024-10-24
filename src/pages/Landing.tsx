@@ -1,8 +1,19 @@
-import React from 'react';
-import { Link } from 'react-router-dom';
+import React, { useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { Activity, BarChart2, FileText, Zap, Mail, ArrowRight } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 
 const Landing: React.FC = () => {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+
+  // Redirect if already logged in
+  useEffect(() => {
+    if (user) {
+      navigate('/dashboard');
+    }
+  }, [user, navigate]);
+
   return (
     <div className="min-h-screen bg-white">
       {/* Navigation */}

@@ -4,7 +4,10 @@ import { BarChart, Bar } from 'recharts';
 import { analyzeEnergyData } from '../utils/geminiApi';
 import { useNavigate } from 'react-router-dom';
 import { jsPDF } from 'jspdf';
-import { useReports, Report } from '../contexts/ReportContext';
+import { useReports } from '../contexts/ReportContext'; // Remove Report from this import
+import { Activity, FileText } from 'lucide-react';
+import { BuildingSystems, VerificationInfo, Report } from '../types';
+
 
 // Mock data for charts (replace with actual data in production)
 const energyConsumptionData = [
@@ -24,13 +27,21 @@ const energyUsageByAreaData = [
 ];
 
 const Analysis: React.FC = () => {
-  const [analysisResult, setAnalysisResult] = useState<string | null>(null);
+  const [analysisResult, setAnalysisResult] = useState<string | null>(() => {
+    // Initialize from localStorage if available
+    return localStorage.getItem('analysisResult');
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [generatingReport, setGeneratingReport] = useState(false);
   const [selectedReport, setSelectedReport] = useState<Report | null>(null);
   const navigate = useNavigate();
   const { reports, addReport, deleteReport } = useReports();
+  const [energyData, setEnergyData] = useState<any[]>([]);
+  const [usageByArea, setUsageByArea] = useState<any[]>([]);
+  const [buildingSystems, setBuildingSystems] = useState<BuildingSystems | null>(null);
+  const [utilityBillsData, setUtilityBillsData] = useState<string[]>([]);
+  const [verificationInfo, setVerificationInfo] = useState<VerificationInfo | null>(null);
 
   useEffect(() => {
     // Load previous analysis result if it exists
@@ -40,6 +51,76 @@ const Analysis: React.FC = () => {
     }
   }, []);
 
+  useEffect(() => {
+    // Load and parse CSV data when component mounts or when CSV content changes
+    const csvContent = localStorage.getItem('csvContent');
+    if (csvContent) {
+      parseCSVData(csvContent);
+    }
+  }, []); // Empty dependency array means this runs once on mount
+
+  useEffect(() => {
+    // Load all saved data when component mounts
+    const buildingSystemsData = localStorage.getItem('buildingSystems');
+    const verificationData = localStorage.getItem('verificationInfo');
+    
+    if (buildingSystemsData) {
+      setBuildingSystems(JSON.parse(buildingSystemsData));
+    }
+    if (verificationData) {
+      setVerificationInfo(JSON.parse(verificationData));
+    }
+  }, []);
+
+  const parseCSVData = (csvContent: string) => {
+    const lines = csvContent.trim().split('\n');
+    const headers = lines[0].split(',');
+    
+    // Parse data for line chart (consumption over time)
+    const timeSeriesData = lines.slice(1).map(line => {
+      const values = line.split(',');
+      return {
+        month: new Date(values[0]).toLocaleString('default', { month: 'short' }),
+        electricity: parseFloat(values[1]),
+        gas: parseFloat(values[2]),
+        water: parseFloat(values[3]),
+        peakDemand: parseFloat(values[7]),
+        occupancy: parseFloat(values[8]),
+        temperature: parseFloat(values[9]),
+        humidity: parseFloat(values[10]),
+        renewable: parseFloat(values[11]),
+        cost: parseFloat(values[12])
+      };
+    });
+    setEnergyData(timeSeriesData);
+    
+    // Calculate averages for bar chart (usage by area)
+    const totalRows = lines.length - 1;
+    const avgHVAC = lines.slice(1).reduce((sum, line) => sum + parseFloat(line.split(',')[4]), 0) / totalRows;
+    const avgLighting = lines.slice(1).reduce((sum, line) => sum + parseFloat(line.split(',')[5]), 0) / totalRows;
+    const avgEquipment = lines.slice(1).reduce((sum, line) => sum + parseFloat(line.split(',')[6]), 0) / totalRows;
+    const avgOther = lines.slice(1).reduce((sum, line) => {
+      const values = line.split(',');
+      return sum + (parseFloat(values[1]) - (parseFloat(values[4]) + parseFloat(values[5]) + parseFloat(values[6])));
+    }, 0) / totalRows;
+
+    setUsageByArea([
+      { area: 'HVAC', usage: avgHVAC },
+      { area: 'Lighting', usage: avgLighting },
+      { area: 'Equipment', usage: avgEquipment },
+      { area: 'Other', usage: Math.max(0, avgOther) } // Ensure non-negative
+    ]);
+  };
+
+  // Update the button text based on whether this is the first analysis
+  const getAnalysisButtonText = () => {
+    if (analysisResult) {
+      return 'Regenerate Analysis';
+    }
+    return 'Generate Analysis';
+  };
+
+  // Modify the runAnalysis function to parse CSV data for charts
   const runAnalysis = async () => {
     setLoading(true);
     setError(null);
@@ -47,52 +128,122 @@ const Analysis: React.FC = () => {
     try {
       const buildingData = localStorage.getItem('buildingData');
       const csvContent = localStorage.getItem('csvContent');
+      const buildingSystems = localStorage.getItem('buildingSystems');
+      const verificationInfo = localStorage.getItem('verificationInfo');
 
       if (!buildingData || !csvContent) {
-        throw new Error('Building data or CSV content is missing. Please go back to the Data Input page and submit the required information.');
+        throw new Error('Required data is missing');
       }
 
-      const parsedBuildingData = JSON.parse(buildingData);
-      const result = await analyzeEnergyData(parsedBuildingData, csvContent);
+      // Combine all data for analysis
+      const analysisData = {
+        building: JSON.parse(buildingData),
+        systems: buildingSystems ? JSON.parse(buildingSystems) : null,
+        verification: verificationInfo ? JSON.parse(verificationInfo) : null,
+        energyData: csvContent
+      };
+
+      // Update the prompt to include new data points
+      const analysisPrompt = `
+        Analyze the energy consumption patterns for ${analysisData.building.name}, 
+        a ${analysisData.building.type} building of ${analysisData.building.size} sq ft.
+        
+        Building Systems Information:
+        - HVAC: ${analysisData.systems?.hvacSystem.type || 'N/A'} (Age: ${analysisData.systems?.hvacSystem.age || 'N/A'} years)
+        - Building Envelope: ${analysisData.systems?.buildingEnvelope.wallConstruction || 'N/A'}
+        - Lighting Schedule: ${analysisData.systems?.lightingSystem.operatingSchedule || 'N/A'}
+        
+        Consider:
+        1. Energy consumption patterns and peak demand
+        2. Impact of occupancy and weather conditions
+        3. System efficiency based on age and type
+        4. Potential for renewable energy integration
+        5. Cost optimization opportunities
+        
+        Provide specific recommendations for:
+        1. Immediate efficiency improvements
+        2. Long-term system upgrades
+        3. Operational schedule optimization
+        4. Cost reduction strategies
+      `;
+
+      // Call your AI analysis function with the enhanced prompt
+      const result = await analyzeEnergyData(analysisData, analysisPrompt);
       setAnalysisResult(result);
       localStorage.setItem('analysisResult', result);
     } catch (err) {
       console.error('Error running analysis:', err);
-      setError(err instanceof Error ? err.message : 'An unknown error occurred while running the analysis.');
+      setError(err instanceof Error ? err.message : 'An unknown error occurred');
     } finally {
       setLoading(false);
     }
   };
 
   const generateReport = () => {
-    if (!analysisResult) return;
+    if (!analysisResult) {
+      setError('No analysis data available. Please run the analysis first.');
+      return;
+    }
     
     setGeneratingReport(true);
 
-    // Simulate report generation delay
-    setTimeout(() => {
-      const buildingData = JSON.parse(localStorage.getItem('buildingData') || '{}');
-      const csvContent = localStorage.getItem('csvContent') || '';
+    try {
+      // Get building data and CSV content from localStorage
+      const buildingData = localStorage.getItem('buildingData');
+      const csvContent = localStorage.getItem('csvContent');
+
+      if (!buildingData || !csvContent) {
+        throw new Error('Required data is missing. Please ensure you have input building data.');
+      }
 
       // Create PDF
       const doc = new jsPDF();
-      // ... existing PDF generation code ...
+      
+      // Add title
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(20);
+      const reportTitle = `Energy Audit Report - ${new Date().toLocaleDateString()}`;
+      doc.text(reportTitle, 20, 20);
+
+      // Add building information
+      doc.setFontSize(16);
+      doc.text("Building Information", 20, 40);
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "normal");
+      const buildingInfo = JSON.parse(buildingData);
+      Object.entries(buildingInfo).forEach(([key, value], index) => {
+        doc.text(`${key}: ${value}`, 20, 50 + (index * 10));
+      });
+
+      // Add analysis results
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(16);
+      doc.text("Analysis Results", 20, 100);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(12);
+      const splitAnalysis = doc.splitTextToSize(analysisResult, 170);
+      doc.text(splitAnalysis, 20, 110);
 
       // Add the new report to the global context
       const newReport: Report = {
         id: Date.now().toString(),
-        title: `Energy Audit Report ${new Date().toLocaleDateString()}`,
+        title: reportTitle,
         date: new Date().toLocaleDateString(),
         content: csvContent,
         analysisResult: analysisResult,
-        buildingData: buildingData
+        buildingData: JSON.parse(buildingData)
       };
+      
       addReport(newReport);
 
       // Save the PDF
       doc.save(`energy_audit_report_${newReport.id}.pdf`);
+    } catch (err) {
+      console.error('Error generating report:', err);
+      setError(err instanceof Error ? err.message : 'Failed to generate report');
+    } finally {
       setGeneratingReport(false);
-    }, 2000);
+    }
   };
 
   const viewReport = (report: Report) => {
@@ -153,63 +304,65 @@ const Analysis: React.FC = () => {
   };
 
   return (
-    <div className="max-w-4xl mx-auto">
-      <h1 className="text-3xl font-bold mb-6">Energy Analysis</h1>
-      
-      <div className="mb-8">
-        <h2 className="text-2xl font-semibold mb-4">Energy Consumption Over Time</h2>
-        <ResponsiveContainer width="100%" height={300}>
-          <LineChart data={energyConsumptionData}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="month" />
-            <YAxis />
-            <Tooltip />
-            <Legend />
-            <Line type="monotone" dataKey="consumption" stroke="#8884d8" activeDot={{ r: 8 }} />
-          </LineChart>
-        </ResponsiveContainer>
+    <div className="max-w-6xl mx-auto">
+      <div className="bg-gradient-to-r from-indigo-600 to-indigo-800 rounded-lg p-8 mb-8 text-white">
+        <h1 className="text-3xl font-bold mb-3">Energy Analysis</h1>
+        <p className="opacity-90">Comprehensive analysis of your building's energy consumption.</p>
       </div>
 
-      <div className="mb-8">
-        <h2 className="text-2xl font-semibold mb-4">Energy Usage by Area</h2>
-        <ResponsiveContainer width="100%" height={300}>
-          <BarChart data={energyUsageByAreaData}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="area" />
-            <YAxis />
-            <Tooltip />
-            <Legend />
-            <Bar dataKey="usage" fill="#82ca9d" />
-          </BarChart>
-        </ResponsiveContainer>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+        <div className="bg-white p-6 rounded-xl shadow-sm">
+          <h2 className="text-xl font-semibold mb-4">Energy Consumption Over Time</h2>
+          <ResponsiveContainer width="100%" height={300}>
+            <LineChart data={energyData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+              <XAxis dataKey="month" />
+              <YAxis />
+              <Tooltip />
+              <Legend />
+              <Line type="monotone" dataKey="consumption" stroke="#4f46e5" strokeWidth={2} dot={{ r: 4 }} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+
+        <div className="bg-white p-6 rounded-xl shadow-sm">
+          <h2 className="text-xl font-semibold mb-4">Energy Usage by Area</h2>
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={usageByArea}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+              <XAxis dataKey="area" />
+              <YAxis />
+              <Tooltip />
+              <Legend />
+              <Bar dataKey="usage" fill="#4f46e5" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
       </div>
 
-      <div className="mb-8">
-        <h2 className="text-2xl font-semibold mb-4">AI-Powered Analysis</h2>
-        {!analysisResult && !loading && !error && (
-          <button
-            onClick={runAnalysis}
-            className="mb-4 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
-          >
-            Run Analysis
-          </button>
-        )}
+      <div className="bg-white rounded-xl shadow-sm p-8 mb-8">
+        <h2 className="text-xl font-semibold mb-4">Gemini-Powered Analysis</h2>
         
-        {analysisResult && !loading && !error && (
-          <div className="mb-4">
+        {!loading && !error && (
+          <div className="flex space-x-4">
             <button
               onClick={runAnalysis}
-              className="mr-4 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+              className="inline-flex items-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
             >
-              Regenerate Analysis
+              <Activity className="mr-2 h-5 w-5" />
+              {getAnalysisButtonText()}
             </button>
-            <button
-              onClick={generateReport}
-              disabled={generatingReport}
-              className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded disabled:opacity-50"
-            >
-              {generatingReport ? 'Generating Report...' : 'Generate Report'}
-            </button>
+
+            {analysisResult && (
+              <button
+                onClick={generateReport}
+                disabled={generatingReport}
+                className="inline-flex items-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <FileText className="mr-2 h-5 w-5" />
+                {generatingReport ? 'Generating Report...' : 'Generate Report'}
+              </button>
+            )}
           </div>
         )}
 
@@ -241,40 +394,39 @@ const Analysis: React.FC = () => {
         )}
       </div>
 
-      {/* Reports Section */}
       {reports.length > 0 && (
-        <div className="mt-8">
-          <h2 className="text-2xl font-semibold mb-4">Generated Reports</h2>
-          <ul className="divide-y divide-gray-200">
+        <div className="bg-white rounded-xl shadow-sm p-8">
+          <h2 className="text-xl font-semibold mb-6">Generated Reports</h2>
+          <div className="divide-y divide-gray-200">
             {reports.map((report) => (
-              <li key={report.id} className="py-4 flex justify-between items-center">
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate">{report.title}</p>
+              <div key={report.id} className="py-4 flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-medium text-gray-900">{report.title}</h3>
                   <p className="text-sm text-gray-500">{report.date}</p>
                 </div>
-                <div className="ml-4 flex-shrink-0 space-x-4">
+                <div className="flex space-x-4">
                   <button
                     onClick={() => viewReport(report)}
-                    className="font-medium text-indigo-600 hover:text-indigo-500"
+                    className="text-indigo-600 hover:text-indigo-800 font-medium"
                   >
                     View
                   </button>
                   <button
                     onClick={() => downloadReport(report)}
-                    className="font-medium text-green-600 hover:text-green-500"
+                    className="text-green-600 hover:text-green-800 font-medium"
                   >
                     Download
                   </button>
                   <button
                     onClick={() => handleDeleteReport(report.id)}
-                    className="font-medium text-red-600 hover:text-red-500"
+                    className="text-red-600 hover:text-red-800 font-medium"
                   >
                     Delete
                   </button>
                 </div>
-              </li>
+              </div>
             ))}
-          </ul>
+          </div>
         </div>
       )}
 

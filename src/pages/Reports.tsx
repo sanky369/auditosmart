@@ -1,71 +1,39 @@
 import React, { useState } from 'react';
 import { jsPDF } from 'jspdf';
-
-interface Report {
-  id: string;
-  title: string;
-  date: string;
-  content: string;
-}
-
-const initialReports: Report[] = [
-  { id: '1', title: "Q1 2023 Energy Audit", date: "March 31, 2023", content: "This is the content of Q1 2023 Energy Audit report." },
-  { id: '2', title: "2022 Annual Energy Report", date: "December 15, 2022", content: "This is the content of 2022 Annual Energy Report." },
-  { id: '3', title: "Summer 2022 HVAC Efficiency Analysis", date: "September 1, 2022", content: "This is the content of Summer 2022 HVAC Efficiency Analysis report." },
-];
+import { useReports } from '../contexts/ReportContext';
+import { Report } from '../types';
 
 const Reports: React.FC = () => {
   const [generatingReport, setGeneratingReport] = useState(false);
-  const [reports, setReports] = useState<Report[]>(initialReports);
   const [selectedReport, setSelectedReport] = useState<Report | null>(null);
+  const { reports, addReport, deleteReport } = useReports(); // Add deleteReport from context
+  const [error, setError] = useState<string | null>(null);
 
   const generateReport = () => {
     setGeneratingReport(true);
-
-    // Simulate report generation delay
-    setTimeout(() => {
-      const doc = new jsPDF();
-
-      // Add content to the PDF
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(20);
-      doc.text("Energy Audit Report", 20, 20);
-
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(12);
-      doc.text("Generated on: " + new Date().toLocaleDateString(), 20, 30);
-
-      doc.setFontSize(16);
-      doc.text("1. Executive Summary", 20, 40);
-      doc.setFontSize(12);
-      doc.text("This report provides an overview of the energy consumption...", 20, 50);
-
-      doc.setFontSize(16);
-      doc.text("2. Energy Consumption Analysis", 20, 70);
-      doc.setFontSize(12);
-      doc.text("Based on the data provided, we observed the following trends...", 20, 80);
-
-      doc.setFontSize(16);
-      doc.text("3. Recommendations", 20, 100);
-      doc.setFontSize(12);
-      doc.text("1. Implement LED lighting throughout the building", 20, 110);
-      doc.text("2. Optimize HVAC schedules", 20, 120);
-      doc.text("3. Install occupancy sensors in less frequently used areas", 20, 130);
-
-      // Save the PDF
-      doc.save("energy_audit_report.pdf");
-
-      // Add the new report to the list
-      const newReport: Report = {
-        id: (reports.length + 1).toString(),
-        title: `Energy Audit Report ${new Date().toLocaleDateString()}`,
-        date: new Date().toLocaleDateString(),
-        content: "This is the content of the newly generated report."
+    try {
+      const buildingData = JSON.parse(localStorage.getItem('buildingData') || '{}');
+      const buildingSystems = JSON.parse(localStorage.getItem('buildingSystems') || '{}');
+      const verificationInfo = JSON.parse(localStorage.getItem('verificationInfo') || '{}');
+      
+      const report = {
+        id: Date.now().toString(),
+        title: `Energy Audit Report - ${buildingData.name}`,
+        date: new Date().toISOString(),
+        buildingData,
+        buildingSystems,
+        verificationInfo,
+        analysisResult: localStorage.getItem('analysisResult') || '',
+        content: localStorage.getItem('csvContent') || ''
       };
-      setReports([newReport, ...reports]);
 
+      addReport(report);
+      setSelectedReport(report);
+    } catch (err) {
+      setError('Failed to generate report');
+    } finally {
       setGeneratingReport(false);
-    }, 2000);
+    }
   };
 
   const viewReport = (report: Report) => {
@@ -74,13 +42,6 @@ const Reports: React.FC = () => {
 
   const closeReport = () => {
     setSelectedReport(null);
-  };
-
-  const deleteReport = (id: string) => {
-    setReports(reports.filter(report => report.id !== id));
-    if (selectedReport && selectedReport.id === id) {
-      setSelectedReport(null);
-    }
   };
 
   return (

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -12,14 +12,21 @@ interface SignupForm {
 
 const Signup: React.FC = () => {
   const { register, handleSubmit, formState: { errors }, watch } = useForm<SignupForm>();
-  const { signup } = useAuth();
+  const { signup, user } = useAuth();
   const navigate = useNavigate();
   const [signupError, setSignupError] = useState<string | null>(null);
+
+  // Redirect if already logged in
+  useEffect(() => {
+    if (user) {
+      navigate('/dashboard');
+    }
+  }, [user, navigate]);
 
   const onSubmit = (data: SignupForm) => {
     const success = signup(data.username, data.email, data.password);
     if (success) {
-      navigate('/');
+      navigate('/dashboard');  // Changed from '/' to '/dashboard'
     } else {
       setSignupError('Failed to create account. Username may already exist.');
     }
