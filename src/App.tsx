@@ -7,7 +7,8 @@ import Login from './pages/Login';
 import Signup from './pages/Signup';
 import DataInput from './pages/DataInput';
 import Analysis from './pages/Analysis';
-import Reports from './pages/Reports';
+import { ReportProvider } from './contexts/ReportContext';
+import Landing from './pages/Landing';
 
 const ProtectedRoute: React.FC<{ element: React.ReactElement }> = ({ element }) => {
   const { user } = useAuth();
@@ -17,18 +18,20 @@ const ProtectedRoute: React.FC<{ element: React.ReactElement }> = ({ element }) 
 function App() {
   return (
     <AuthProvider>
-      <Router>
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route path="/signup" element={<Signup />} />
-          <Route path="/" element={<ProtectedRoute element={<Layout />} />}>
-            <Route index element={<Home />} />
-            <Route path="data-input" element={<DataInput />} />
-            <Route path="analysis" element={<Analysis />} />
-            <Route path="reports" element={<Reports />} />
-          </Route>
-        </Routes>
-      </Router>
+      <ReportProvider>
+        <Router>
+          <Routes>
+            <Route path="/" element={<Landing />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/signup" element={<Signup />} />
+            <Route path="/dashboard" element={<ProtectedRoute element={<Layout />} />}>
+              <Route index element={<Home />} />
+              <Route path="data-input" element={<DataInput />} />
+              <Route path="analysis" element={<Analysis />} />
+            </Route>
+          </Routes>
+        </Router>
+      </ReportProvider>
     </AuthProvider>
   );
 }
