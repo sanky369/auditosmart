@@ -16,7 +16,9 @@ const Home: React.FC = () => {
   return (
     <div className="max-w-6xl mx-auto">
       <div className="bg-gradient-to-r from-indigo-600 to-indigo-800 rounded-lg p-8 mb-8 text-white">
-        <h1 className="text-4xl font-bold mb-3">Welcome, {user}!</h1>
+        <h1 className="text-4xl font-bold mb-3">
+          Welcome, {user?.displayName || 'User'}!
+        </h1>
         <p className="text-lg opacity-90">
           Your Energy Audit Assistant dashboard. Here's your overview:
         </p>

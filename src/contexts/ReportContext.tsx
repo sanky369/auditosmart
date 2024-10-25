@@ -1,47 +1,41 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-
-export interface Report {
-  id: string;
-  title: string;
-  date: string;
-  content: string;
-  analysisResult: string;
-  buildingData: any;
-}
+import React, { createContext, useContext, useState, useCallback } from 'react';
+import { Report } from '../types';
 
 interface ReportContextType {
   reports: Report[];
   addReport: (report: Report) => void;
   deleteReport: (id: string) => void;
-  getReport: (id: string) => Report | undefined;
 }
 
 const ReportContext = createContext<ReportContextType | undefined>(undefined);
 
 export const ReportProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [reports, setReports] = useState<Report[]>(() => {
+    // Initialize from localStorage if available
     const savedReports = localStorage.getItem('reports');
     return savedReports ? JSON.parse(savedReports) : [];
   });
 
-  useEffect(() => {
-    localStorage.setItem('reports', JSON.stringify(reports));
-  }, [reports]);
+  const addReport = useCallback((report: Report) => {
+    setReports(prevReports => {
+      const newReports = [...prevReports, report];
+      // Save to localStorage
+      localStorage.setItem('reports', JSON.stringify(newReports));
+      return newReports;
+    });
+  }, []);
 
-  const addReport = (report: Report) => {
-    setReports(prevReports => [report, ...prevReports]);
-  };
-
-  const deleteReport = (id: string) => {
-    setReports(prevReports => prevReports.filter(report => report.id !== id));
-  };
-
-  const getReport = (id: string) => {
-    return reports.find(report => report.id === id);
-  };
+  const deleteReport = useCallback((id: string) => {
+    setReports(prevReports => {
+      const newReports = prevReports.filter(report => report.id !== id);
+      // Save to localStorage
+      localStorage.setItem('reports', JSON.stringify(newReports));
+      return newReports;
+    });
+  }, []);
 
   return (
-    <ReportContext.Provider value={{ reports, addReport, deleteReport, getReport }}>
+    <ReportContext.Provider value={{ reports, addReport, deleteReport }}>
       {children}
     </ReportContext.Provider>
   );

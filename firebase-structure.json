@@ -1,0 +1,52 @@
+{
+  "users": {
+    "example-user": {
+      "email": "example@test.com",
+      "displayName": "Example User",
+      "organization": "Test Org",
+      "role": "user",
+      "createdAt": "2024-03-21T00:00:00.000Z"
+    }
+  },
+  "buildings": {
+    "example-building": {
+      "userId": "example-user",
+      "name": "Example Building",
+      "type": "commercial",
+      "size": 50000,
+      "location": "123 Main St",
+      "createdAt": "2024-03-21T00:00:00.000Z",
+      "updatedAt": "2024-03-21T00:00:00.000Z"
+    }
+  },
+  "buildingSystems": {
+    "example-system": {
+      "userId": "example-user",
+      "buildingId": "example-building",
+      "hvacSystem": {
+        "type": "Split System",
+        "age": 5,
+        "efficiency": 0.95,
+        "refrigerantType": "R-410A",
+        "maintenanceSchedule": "Monthly"
+      },
+      "lightingSystem": {
+        "types": ["LED", "Fluorescent"],
+        "controlSystems": ["Motion Sensors"],
+        "operatingSchedule": "8AM-6PM"
+      },
+      "buildingEnvelope": {
+        "wallConstruction": "Brick Veneer",
+        "roofType": "Metal Roof",
+        "windowTypes": ["Double-pane"],
+        "insulationRValues": {
+          "walls": 13,
+          "roof": 30,
+          "foundation": 10
+        }
+      },
+      "createdAt": "2024-03-21T00:00:00.000Z",
+      "updatedAt": "2024-03-21T00:00:00.000Z"
+    }
+  }
+}

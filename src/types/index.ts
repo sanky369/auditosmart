@@ -28,7 +28,8 @@ export interface VerificationInfo {
   verifierCredentials: string;
   verifierLicenseNumber: string;
   verificationDate: string;
-  verifierSignature: File;
+  verifierSignature?: File;  // For form handling
+  signatureUrl?: string;     // For stored URL
 }
 
 export interface Report {
@@ -38,4 +39,5 @@ export interface Report {
   content: string;
   analysisResult: string;
   buildingData: any;
+  buildingSystems: BuildingSystems | null;
 }

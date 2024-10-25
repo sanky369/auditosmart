@@ -9,31 +9,23 @@ if (!API_KEY) {
 
 const genAI = new GoogleGenerativeAI(API_KEY);
 
-export async function analyzeEnergyData(buildingData: any, csvData: string) {
+export async function analyzeEnergyData(analysisData: any, prompt: string) {
   if (!API_KEY) {
     throw new Error('Google API key is not set. Please check your environment variables.');
   }
 
   try {
-    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro-002" });
 
-    const prompt = `
-      Analyze the following energy consumption data for a building and provide recommendations:
-
-      Building Information:
-      ${JSON.stringify(buildingData, null, 2)}
+    // Combine the data and prompt
+    const fullPrompt = `
+      ${prompt}
 
       Energy Consumption Data (CSV):
-      ${csvData}
-
-      Please provide:
-      1. A summary of the energy consumption patterns
-      2. Identification of any inefficiencies or anomalies
-      3. Recommendations for improving energy efficiency
-      4. Potential cost savings estimates
+      ${analysisData.energyData}
     `;
 
-    const result = await model.generateContent(prompt);
+    const result = await model.generateContent(fullPrompt);
     const response = await result.response;
     return response.text();
   } catch (error) {
