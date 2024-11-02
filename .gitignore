@@ -32,3 +32,6 @@ dist-ssr
 
 # Firebase
 serviceAccount.json
+
+# Local Netlify folder
+.netlify
