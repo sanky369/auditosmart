@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useReports } from '../contexts/ReportContext';
 import { useNavigate } from 'react-router-dom';
@@ -9,9 +9,30 @@ const Home: React.FC = () => {
   const { user } = useAuth();
   const { reports } = useReports();
   const navigate = useNavigate();
+  const [pendingCount, setPendingCount] = useState(0);
+
+  // Load pending tasks when component mounts
+  useEffect(() => {
+    const loadPendingTasks = () => {
+      // Check localStorage for any incomplete building data
+      const buildingData = localStorage.getItem('buildingData');
+      const buildingSystems = localStorage.getItem('buildingSystems');
+      const csvContent = localStorage.getItem('csvContent');
+      
+      let count = 0;
+      
+      // If any required data is missing, increment pending count
+      if (!buildingData || !buildingSystems || !csvContent) {
+        count++;
+      }
+      
+      setPendingCount(count);
+    };
+
+    loadPendingTasks();
+  }, []);
 
   const recentReports = reports.slice(0, 3);
-  const pendingCount = 2; // This would come from your backend in a real app
 
   return (
     <div className="max-w-6xl mx-auto">
@@ -54,8 +75,11 @@ const Home: React.FC = () => {
         <DashboardCard 
           title="Pending Tasks"
           icon={<AlertCircle className="h-6 w-6 text-amber-600" />}
-          content={`${pendingCount} buildings need data input.`}
-          onClick={() => navigate('/data-input')}
+          content={pendingCount > 0 
+            ? `${pendingCount} building${pendingCount === 1 ? '' : 's'} need${pendingCount === 1 ? 's' : ''} data input.`
+            : "No pending tasks."
+          }
+          onClick={() => navigate('/dashboard/data-input')}
           className="bg-gradient-to-br from-amber-50 to-white"
         />
 

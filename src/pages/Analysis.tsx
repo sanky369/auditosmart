@@ -406,23 +406,33 @@ const Analysis: React.FC = () => {
 
   // Update the generateReport function
   const generateReport = () => {
-    if (!analysisResult) {
-      setError('No analysis data available. Please run the analysis first.');
+    if (!analysisResult || !buildingData || generatingReport) {
+      setError('No analysis data available or report generation in progress');
       return;
     }
     
     setGeneratingReport(true);
 
     try {
-      const buildingData = localStorage.getItem('buildingData');
-      const csvContent = localStorage.getItem('csvContent');
-      const buildingSystems = localStorage.getItem('buildingSystems');
+      // Create a unique report ID
+      const reportId = `report_${Date.now()}`;
+      
+      // Create report object - use buildingData directly since it's already an object
+      const newReport = {
+        id: reportId,
+        title: `Energy Audit Report - ${buildingData.name}`,
+        date: new Date().toLocaleDateString(),
+        content: analysisResult,
+        analysisResult: analysisResult,
+        buildingData: buildingData, // Use buildingData directly, it's already an object
+        buildingSystems: buildingSystems,
+        timestamp: new Date().toISOString()
+      };
 
-      if (!buildingData || !csvContent) {
-        throw new Error('Required data is missing');
-      }
+      // Add to reports context
+      addReport(newReport);
 
-      // Create PDF with larger page size for more content
+      // Generate PDF
       const doc = new jsPDF({
         orientation: 'portrait',
         unit: 'mm',
@@ -451,9 +461,10 @@ const Analysis: React.FC = () => {
       yPos += 10;
       doc.setFont("helvetica", "normal");
       doc.setFontSize(11);
-      const buildingInfo = JSON.parse(buildingData);
-      const summaryText = `This report presents a comprehensive energy audit analysis for ${buildingInfo.name}, 
-      a ${buildingInfo.size} sq ft ${buildingInfo.type} building located in ${buildingInfo.location}. 
+      
+      // Use buildingData directly without parsing
+      const summaryText = `This report presents a comprehensive energy audit analysis for ${buildingData.name}, 
+      a ${buildingData.size} sq ft ${buildingData.type} building located in ${buildingData.location}. 
       The analysis includes detailed evaluation of energy consumption patterns, building systems performance, 
       and recommendations for energy efficiency improvements.`;
       const splitSummary = doc.splitTextToSize(summaryText, 180);
@@ -470,16 +481,16 @@ const Analysis: React.FC = () => {
       doc.setFontSize(11);
       
       const buildingDetails = [
-        `Building Name: ${buildingInfo.name}`,
-        `Type: ${buildingInfo.type}`,
-        `Size: ${buildingInfo.size} sq ft`,
-        `Location: ${buildingInfo.location}`,
-        `Year Built: ${buildingInfo.yearBuilt}`,
-        `Number of Floors: ${buildingInfo.numberOfFloors}`,
-        `Occupancy: ${buildingInfo.occupancyPercentage}%`,
-        `Operating Hours: Weekday ${buildingInfo.operatingHours?.weekday || 'N/A'}, Weekend ${buildingInfo.operatingHours?.weekend || 'N/A'}`,
-        `Last Retrofit: ${buildingInfo.lastRetrofit || 'N/A'}`,
-        `Energy Star Score: ${buildingInfo.energyStarScore || 'N/A'}`
+        `Building Name: ${buildingData.name}`,
+        `Type: ${buildingData.type}`,
+        `Size: ${buildingData.size} sq ft`,
+        `Location: ${buildingData.location}`,
+        `Year Built: ${buildingData.yearBuilt}`,
+        `Number of Floors: ${buildingData.numberOfFloors}`,
+        `Occupancy: ${buildingData.occupancyPercentage}%`,
+        `Operating Hours: Weekday ${buildingData.operatingHours?.weekday || 'N/A'}, Weekend ${buildingData.operatingHours?.weekend || 'N/A'}`,
+        `Last Retrofit: ${buildingData.lastRetrofit || 'N/A'}`,
+        `Energy Star Score: ${buildingData.energyStarScore || 'N/A'}`
       ];
 
       buildingDetails.forEach(detail => {
@@ -497,8 +508,7 @@ const Analysis: React.FC = () => {
         doc.setFont("helvetica", "normal");
         doc.setFontSize(11);
 
-        const systems = JSON.parse(buildingSystems);
-        const systemsText = formatBuildingSystems(systems);
+        const systemsText = formatBuildingSystems(buildingSystems);
         systemsText.forEach(line => {
           if (yPos > 270) { // Check if we need a new page
             doc.addPage();
@@ -541,30 +551,16 @@ const Analysis: React.FC = () => {
       doc.addPage();
       // ... Add visualization code here ...
 
-      // Save the PDF
-      const reportId = Date.now().toString();
+      // Save the PDF with unique name
       doc.save(`energy_audit_report_${reportId}.pdf`);
 
-      // Create and save report object
-      const newReport: Report = {
-        id: reportId,
-        title: `Energy Audit Report - ${buildingInfo.name}`,
-        date: new Date().toLocaleDateString(),
-        content: csvContent,
-        analysisResult: analysisResult,
-        buildingData: buildingInfo,
-        buildingSystems: buildingSystems ? JSON.parse(buildingSystems) : null
-      };
-
-      addReport(newReport);
-      
-      // Update localStorage
+      // Update localStorage - stringify the entire report object
       const existingReports = JSON.parse(localStorage.getItem('reports') || '[]');
       localStorage.setItem('reports', JSON.stringify([...existingReports, newReport]));
 
     } catch (err) {
       console.error('Error generating report:', err);
-      setError(err instanceof Error ? err.message : 'Failed to generate report');
+      setError(err instanceof Error ? err.message : 'An error occurred while generating the report');
     } finally {
       setGeneratingReport(false);
     }
@@ -605,18 +601,32 @@ const Analysis: React.FC = () => {
 
   // Helper function to format analysis result
   const formatAnalysisResult = (result: string): Array<{text: string, isHeader: boolean}> => {
-    const sections = result.split('\n\n');
+    const sections = result.split('\n');
     const formatted: Array<{text: string, isHeader: boolean}> = [];
     
     sections.forEach(section => {
-      if (section.includes('**')) {
-        // Handle headers
-        const headerText = section.replace(/\*\*/g, '').trim();
-        formatted.push({ text: headerText, isHeader: true });
-      } else {
-        // Handle regular content
-        formatted.push({ text: section.trim(), isHeader: false });
-      }
+      // Skip empty lines
+      if (!section.trim()) return;
+      
+      // Clean up the text by removing special characters
+      let cleanText = section
+        .replace(/#+\s*/g, '')     // Remove markdown headers
+        .replace(/\*\*/g, '')      // Remove bold markers
+        .replace(/\*/g, '')        // Remove italic markers
+        .trim();
+
+      // Determine if this is a header by checking original text
+      const isHeader = (
+        section.startsWith('#') ||          // Markdown headers
+        section.includes('**') ||           // Bold text
+        /^\d+\.\s/.test(section) ||        // Numbered lists
+        section.toUpperCase() === section   // ALL CAPS lines
+      );
+      
+      formatted.push({
+        text: cleanText,
+        isHeader: isHeader
+      });
     });
     
     return formatted;

@@ -18,10 +18,11 @@ export const ReportProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const addReport = useCallback((report: Report) => {
     setReports(prevReports => {
-      const newReports = [...prevReports, report];
-      // Save to localStorage
-      localStorage.setItem('reports', JSON.stringify(newReports));
-      return newReports;
+      // Check if report with same ID already exists
+      if (prevReports.some(r => r.id === report.id)) {
+        return prevReports;
+      }
+      return [...prevReports, report];
     });
   }, []);
 

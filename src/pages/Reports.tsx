@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { jsPDF } from 'jspdf';
+//import { jsPDF } from 'jspdf';
 import { useReports } from '../contexts/ReportContext';
 import { Report } from '../types';
 
@@ -15,6 +15,14 @@ const Reports: React.FC = () => {
       const buildingData = JSON.parse(localStorage.getItem('buildingData') || '{}');
       const buildingSystems = JSON.parse(localStorage.getItem('buildingSystems') || '{}');
       const verificationInfo = JSON.parse(localStorage.getItem('verificationInfo') || '{}');
+
+      // Check for existing report with the same title
+      const existingReport = reports.find(report => report.title === `Energy Audit Report - ${buildingData.name}`);
+      if (existingReport) {
+        setError('A report with this title already exists. Please modify the title or delete the existing report.');
+        setGeneratingReport(false);
+        return;
+      }
       
       const report = {
         id: Date.now().toString(),

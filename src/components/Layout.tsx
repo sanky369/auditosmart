@@ -25,7 +25,7 @@ const Layout: React.FC = () => {
         </div>
         <ul className="mt-6">
           <NavItem to="/" icon={<Home size={20} />} text="Home" />
-          <NavItem to="/data-input" icon={<FileInput size={20} />} text="Data Input" />
+          <NavItem to="/data-input" icon={<FileInput size={20} />} text="Start Here" />
           <NavItem to="/analysis" icon={<BarChart size={20} />} text="Analysis" />
           <li className="border-t border-gray-200 mt-2">
             <button
