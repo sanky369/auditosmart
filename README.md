@@ -50,11 +50,11 @@ npm run dev
 
 ## 🏆 Hackathon Details
 
-This project was created for [Hackathon Name] 2024. Our goal was to revolutionize the auditing process by making it more efficient, accurate, and accessible through technology.
+This project was created for Google Cloud Gemini Hackathon 2024. The goal of the project is to revolutionize the auditing process by making it more efficient, accurate, and accessible through technology.
 
 ## 📝 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License.
 
 ---
 
